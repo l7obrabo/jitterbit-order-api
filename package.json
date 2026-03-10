@@ -1,0 +1,19 @@
+{
+  "name": "jitterbit-order-api",
+  "version": "1.0.0",
+  "description": "API para gerenciamento de pedidos",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node --test test/"
+  },
+  "keywords": ["api", "orders", "jitterbit"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "pg": "^8.11.3"
+  }
+}
