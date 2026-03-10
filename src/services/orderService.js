@@ -1,108 +1,91 @@
-const pool = require('../config/database');
+const { Order, Item } = require('../models');
 const { mapOrderToResponse } = require('../utils/orderMapper');
 
 async function create(order) {
-  const client = await pool.connect();
-
+  const t = await require('../models').sequelize.transaction();
   try {
-    await client.query('BEGIN');
-
-    await client.query(
-      `INSERT INTO "Order" ("orderId", "value", "creationDate") VALUES ($1, $2, $3)`,
-      [order.orderId, order.value, order.creationDate]
+    await Order.create(
+      {
+        orderId: order.orderId,
+        value: order.value,
+        creationDate: order.creationDate,
+      },
+      { transaction: t }
     );
-
-    for (const item of order.items) {
-      await client.query(
-        `INSERT INTO "Items" ("orderId", "productId", "quantity", "price") VALUES ($1, $2, $3, $4)`,
-        [order.orderId, item.productId, item.quantity, item.price]
+    if (order.items && order.items.length > 0) {
+      await Item.bulkCreate(
+        order.items.map((it) => ({
+          orderId: order.orderId,
+          productId: it.productId,
+          quantity: it.quantity,
+          price: it.price,
+        })),
+        { transaction: t }
       );
     }
-
-    await client.query('COMMIT');
+    await t.commit();
     return getById(order.orderId);
   } catch (err) {
-    await client.query('ROLLBACK');
+    await t.rollback();
     throw err;
-  } finally {
-    client.release();
   }
 }
 
 async function getById(orderId) {
-  const orderResult = await pool.query(
-    `SELECT "orderId", "value", "creationDate" FROM "Order" WHERE "orderId" = $1`,
-    [orderId]
-  );
-
-  const orderRow = orderResult.rows[0];
+  const orderRow = await Order.findByPk(orderId, {
+    include: [{ model: Item, as: 'Items', attributes: ['productId', 'quantity', 'price'] }],
+  });
   if (!orderRow) return null;
-
-  const itemsResult = await pool.query(
-    `SELECT "productId", "quantity", "price" FROM "Items" WHERE "orderId" = $1`,
-    [orderId]
-  );
-
-  return mapOrderToResponse(orderRow, itemsResult.rows);
+  const plain = orderRow.get({ plain: true });
+  return mapOrderToResponse(plain, plain.Items || []);
 }
 
 async function listAll() {
-  const orderResult = await pool.query(
-    `SELECT "orderId", "value", "creationDate" FROM "Order" ORDER BY "creationDate" DESC`
-  );
-
-  const orders = [];
-  for (const row of orderResult.rows) {
-    const full = await getById(row.orderId);
-    if (full) orders.push(full);
-  }
-  return orders;
+  const rows = await Order.findAll({
+    order: [['creationDate', 'DESC']],
+    include: [{ model: Item, as: 'Items', attributes: ['productId', 'quantity', 'price'] }],
+  });
+  return rows.map((row) => {
+    const plain = row.get({ plain: true });
+    return mapOrderToResponse(plain, plain.Items || []);
+  });
 }
 
 async function update(orderId, order) {
-  const client = await pool.connect();
-
+  const t = await require('../models').sequelize.transaction();
   try {
-    await client.query('BEGIN');
-
-    const existResult = await client.query(
-      `SELECT 1 FROM "Order" WHERE "orderId" = $1`,
-      [orderId]
-    );
-    if (existResult.rows.length === 0) {
+    const existing = await Order.findByPk(orderId, { transaction: t });
+    if (!existing) {
+      await t.rollback();
       return null;
     }
-
-    await client.query(
-      `UPDATE "Order" SET "value" = $1, "creationDate" = $2 WHERE "orderId" = $3`,
-      [order.value, order.creationDate, orderId]
+    await existing.update(
+      { value: order.value, creationDate: order.creationDate },
+      { transaction: t }
     );
-
-    await client.query(`DELETE FROM "Items" WHERE "orderId" = $1`, [orderId]);
-
-    for (const item of order.items) {
-      await client.query(
-        `INSERT INTO "Items" ("orderId", "productId", "quantity", "price") VALUES ($1, $2, $3, $4)`,
-        [orderId, item.productId, item.quantity, item.price]
+    await Item.destroy({ where: { orderId }, transaction: t });
+    if (order.items && order.items.length > 0) {
+      await Item.bulkCreate(
+        order.items.map((it) => ({
+          orderId,
+          productId: it.productId,
+          quantity: it.quantity,
+          price: it.price,
+        })),
+        { transaction: t }
       );
     }
-
-    await client.query('COMMIT');
+    await t.commit();
     return getById(orderId);
   } catch (err) {
-    await client.query('ROLLBACK');
+    await t.rollback();
     throw err;
-  } finally {
-    client.release();
   }
 }
 
 async function remove(orderId) {
-  const result = await pool.query(
-    `DELETE FROM "Order" WHERE "orderId" = $1 RETURNING "orderId"`,
-    [orderId]
-  );
-  return result.rowCount > 0;
+  const deleted = await Order.destroy({ where: { orderId } });
+  return deleted > 0;
 }
 
 module.exports = {
