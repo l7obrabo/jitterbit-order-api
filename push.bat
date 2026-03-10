@@ -13,11 +13,11 @@ if not exist .git (
 
 git add .
 git status
-git commit -m "refactor: usa Sequelize (ORM) e atualiza README"
+git commit -m "fix: CI testes (workflow, engines, gitattributes)" || echo Nada para commitar.
 git push -u origin main
 
 if errorlevel 1 (
   echo.
-  echo Se o commit falhou: confira se ha alteracoes. Se o push falhou: confira login no GitHub.
+  echo Push falhou - confira se esta logado no GitHub.
   pause
 )

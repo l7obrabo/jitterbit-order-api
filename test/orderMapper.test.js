@@ -33,20 +33,25 @@ describe('orderMapper', () => {
     });
 
     it('lança erro quando body é inválido', () => {
-      assert.throws(() => mapRequestBodyToOrder(null), /Dados do pedido inválidos/);
-      assert.throws(() => mapRequestBodyToOrder(undefined), /Dados do pedido inválidos/);
-      assert.throws(() => mapRequestBodyToOrder(''), /Dados do pedido inválidos/);
+      const msg = 'Dados do pedido inválidos';
+      assert.throws(() => mapRequestBodyToOrder(null), (err) => err.message === msg);
+      assert.throws(() => mapRequestBodyToOrder(undefined), (err) => err.message === msg);
+      assert.throws(() => mapRequestBodyToOrder(''), (err) => err.message === msg);
     });
 
     it('lança erro quando numeroPedido ou valorTotal faltam', () => {
-      assert.throws(() => mapRequestBodyToOrder({ valorTotal: 10 }), /obrigatórios/);
-      assert.throws(() => mapRequestBodyToOrder({ numeroPedido: 'x' }), /obrigatórios/);
+      assert.throws(() => mapRequestBodyToOrder({ valorTotal: 10 }), (err) =>
+        err.message.includes('obrigatórios')
+      );
+      assert.throws(() => mapRequestBodyToOrder({ numeroPedido: 'x' }), (err) =>
+        err.message.includes('obrigatórios')
+      );
     });
 
     it('lança erro quando dataCriacao é inválida', () => {
       assert.throws(
         () => mapRequestBodyToOrder({ numeroPedido: 'x', valorTotal: 1, dataCriacao: 'invalid' }),
-        /dataCriacao inválida/
+        (err) => err.message.includes('dataCriacao inválida')
       );
     });
 
